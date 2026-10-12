@@ -14,31 +14,89 @@ env:
   GCP_PROJECT: ${{ vars.GCP_PROJECT }}
   BQ_LOCATION: EU
   GCS_BUCKET: ${{ vars.GCS_BUCKET }}
+  DBT_ARGS: --project-dir dbt --profiles-dir dbt
 
 jobs:
-  pipeline:
+  extraction_prix:
+    name: 1a. Extraction des prix
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/preparer
         with:
-          python-version: "3.12"
-          cache: pip
-      - run: pip install -r requirements.txt
-
-      - name: Authentification GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Extraction et chargement des prix (snapshot du jour)
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Télécharger le flux et charger le snapshot du jour
         run: python -m ingestion.extract_prix
 
-      - name: Chargement du référentiel des enseignes
+  chargement_enseignes:
+    name: 1b. Chargement des enseignes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Charger le référentiel des enseignes
         run: python -m ingestion.load_enseignes
 
-      - name: Fraîcheur des sources
-        run: dbt source freshness --project-dir dbt --profiles-dir dbt
+  controle_sources:
+    name: 2. Contrôle des sources
+    needs: [extraction_prix, chargement_enseignes]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Fraîcheur des données
+        run: dbt source freshness $DBT_ARGS
+      - name: Tests sur les tables brutes
+        run: dbt test --select "source:raw" $DBT_ARGS
 
-      - name: Transformations et tests dbt
-        run: dbt build --project-dir dbt --profiles-dir dbt
+  staging:
+    name: 3. Staging
+    needs: controle_sources
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Vues de staging et leurs tests
+        run: dbt build --select "path:models/staging" --exclude "source:*" $DBT_ARGS
+
+  dimensions:
+    name: 4. Dimensions
+    needs: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: dim_station et dim_carburant
+        run: dbt build --select dim_station dim_carburant --indirect-selection cautious $DBT_ARGS
+
+  faits:
+    name: 5. Table de faits
+    needs: dimensions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: fact_prix et ses tests
+        run: dbt build --select fact_prix $DBT_ARGS
+
+  marts:
+    name: 6. Tables métier
+    needs: faits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/preparer
+        with:
+          gcp_sa_key: ${{ secrets.GCP_SA_KEY }}
+      - name: Positionnement par département et concurrence locale
+        run: dbt build --select mart_positionnement_departement mart_concurrence_locale $DBT_ARGS

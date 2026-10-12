@@ -1,0 +1,22 @@
+name: Préparer l'environnement
+description: Installe Python et les dépendances, puis s'authentifie sur GCP.
+
+inputs:
+  gcp_sa_key:
+    description: Clé JSON du compte de service GCP
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: pip
+    - name: Installer les dépendances
+      shell: bash
+      run: pip install -r requirements.txt
+    - name: Authentification GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ inputs.gcp_sa_key }}
