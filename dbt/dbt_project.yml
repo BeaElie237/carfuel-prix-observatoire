@@ -1,0 +1,26 @@
+name: carfuel_observatoire
+version: "1.0.0"
+config-version: 2
+profile: carfuel_observatoire
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Bornes de plausibilité d'un prix au litre (en euros)
+  prix_min: 0.3
+  prix_max: 4.0
+  # Un prix non mis à jour depuis plus de N jours est considéré comme périmé
+  fraicheur_max_jours: 7
+  # Rayon de la zone de chalandise pour la concurrence locale (en mètres)
+  rayon_concurrence_m: 5000
+
+models:
+  carfuel_observatoire:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

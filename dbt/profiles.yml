@@ -1,0 +1,16 @@
+# Aucun secret ici : l'authentification passe par les identifiants par défaut
+# (gcloud auth application-default login en local, compte de service en CI).
+carfuel_observatoire:
+  target: prod
+  outputs:
+    prod:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT', 'projet-non-configure') }}"
+      dataset: "{{ env_var('BQ_ANALYTICS_DATASET', 'carfuel_analytics') }}"
+      location: "{{ env_var('BQ_LOCATION', 'EU') }}"
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300
+      # Garde-fou coût : une requête qui scannerait plus de 1 Go échoue
+      maximum_bytes_billed: 1000000000

@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: dim_carburant
+    description: Référentiel des carburants suivis.
+    columns:
+      - name: carburant_code
+        data_tests: [unique, not_null]
+
+  - name: dim_station
+    description: Une ligne par station-service, avec son enseigne et sa localisation.
+    columns:
+      - name: station_id
+        description: Identifiant officiel du point de vente.
+        data_tests: [unique, not_null]
+      - name: groupe_enseigne
+        description: Groupe de distribution ('Inconnue' si la station est absente du référentiel).
+        data_tests: [not_null]
+      - name: est_carrefour
+        data_tests: [not_null]
+      - name: type_reseau
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['Grande distribution', 'Pétrolier', 'Autres', 'Inconnu']
+      - name: position
+        description: Point géographique (GEOGRAPHY) utilisé pour les calculs de distance.
+
+  - name: fact_prix
+    description: >
+      Table de faits : un prix par jour, station et carburant. Partitionnée par
+      snapshot_date et clusterisée par carburant et station.
+    columns:
+      - name: snapshot_date
+        data_tests: [not_null]
+      - name: station_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_station')
+                field: station_id
+      - name: carburant_code
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_carburant')
+                field: carburant_code
+      - name: prix
+        description: Prix TTC au litre, en euros.
+        data_tests: [not_null]
+      - name: est_prix_frais
+        description: Vrai si le prix a été mis à jour dans les derniers jours (variable fraicheur_max_jours).
+
+  - name: mart_positionnement_departement
+    description: >
+      Prix moyen Carrefour face aux concurrents, par jour, carburant et département.
+      Un écart négatif signifie que Carrefour est moins cher.
+    columns:
+      - name: ecart_vs_concurrents
+        description: Prix moyen Carrefour moins prix moyen des concurrents, en euros par litre.
+
+  - name: mart_concurrence_locale
+    description: >
+      Pour chaque station Carrefour et chaque carburant, position prix face aux
+      concurrents situés dans la zone de chalandise (dernier snapshot).
+    columns:
+      - name: station_id
+        data_tests: [not_null]
+      - name: rang_prix
+        description: 1 si la station Carrefour est la moins chère de sa zone.

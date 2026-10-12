@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+*.json.gz
+# Jamais de clé de compte de service dans le dépôt
+*-key.json
+sa-key.json
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+.pytest_cache/
+.ruff_cache/
+.user.yml
+logs/

@@ -1,0 +1,36 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Couche brute alimentée par les scripts Python du dossier ingestion/.
+    database: "{{ env_var('GCP_PROJECT', 'projet-non-configure') }}"
+    schema: "{{ env_var('BQ_RAW_DATASET', 'carfuel_raw') }}"
+    tables:
+      - name: prix_snapshots
+        description: >
+          Un snapshot par jour du flux instantané officiel des prix des carburants.
+          Une ligne par station, l'enregistrement source est conservé tel quel en JSON.
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 36, period: hour}
+            error_after: {count: 72, period: hour}
+        columns:
+          - name: snapshot_date
+            description: Date du snapshot (heure de Paris). Colonne de partition.
+            data_tests: [not_null]
+          - name: station_id
+            description: Identifiant officiel du point de vente.
+            data_tests: [not_null]
+          - name: payload
+            description: Enregistrement source complet, en JSON.
+            data_tests: [not_null]
+      - name: enseignes
+        description: >
+          Référentiel identifiant officiel -> enseigne, publié sur data.gouv.fr et
+          enrichi par OpenStreetMap (licence ODbL). Le flux officiel ne contient pas la marque.
+        columns:
+          - name: station_id
+            data_tests: [not_null, unique]
+          - name: nom_normalise
+            data_tests: [not_null]
